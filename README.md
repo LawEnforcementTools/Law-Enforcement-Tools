@@ -2,7 +2,3 @@ Law Enforcement Tools is a Standalone Script witch allows you to get people into
 
 Latest Version 1.3.0
 
-Added Cuffing System
-Added Dragging System
-Fixed Seating & Unseating
-Added “M” Menu ( UI )
