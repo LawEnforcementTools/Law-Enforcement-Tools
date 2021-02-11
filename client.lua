@@ -1,142 +1,99 @@
--- DO NOT TOUCH / EDIT  -
-
-local pluginName = 'Law Enforcement Tools'
-
-local isCop = true                                                       
-
-
-
-RegisterCommand('seat', function(source, args, rawCommand)
-	if isCop then
-		closest, distance = GetClosestPlayer()
-		if closest ~= nil and DoesEntityExist(GetPlayerPed(closest)) then
-			if distance -1 and distance < 3 then
-				local closestID = GetPlayerServerId(closest)
-				local pP = GetPlayerPed(-1)
-				local veh = GetVehiclePedIsIn(pP, true)
-				TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'You forced the player you are dragging into the nearest vehicle. (' .. GetPlayerName(closest) .. ')')
-				TriggerServerEvent('seatServer', closestID, veh)
-			else
-				TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'Nearest player is too far away.')
-			end
-		end
-	else
-		TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'You are not a cop.')
-	end
-end)
-
-RegisterCommand('unseat', function(source, args, rawCommand)
-	if isCop then
-		closest, distance = GetClosestPlayer()
-		if closest ~= nil and DoesEntityExist(GetPlayerPed(closest)) then
-			if distance -1 and distance < 3 then
-				local closestID = GetPlayerServerId(closest)
-				TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'You forced the player in the nearest vehicle out of the vehicle. (' .. GetPlayerName(closest) .. ')')
-				TriggerServerEvent('unSeatServer', closestID)
-			else
-				TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'Nearest player is too far away.')
-			end
-		end
-	else
-		TriggerEvent('chatMessage', 'SYSTEM', {255, 0, 0}, 'You are not a cop.')
-	end
-end)
-
-RegisterNetEvent('seatClient')
-AddEventHandler('seatClient', function(veh)
-	if handcuffed == true then
-		local pP = GetPlayerPed(-1)
-		local pos = GetEntityCoords(pP)
-		local entityWorld = GetOffsetFromEntityInWorldCoords(pP, 0.0, 20.0, 0.0)
-		local rayHandle = CastRayPointToPoint(pos.x, pos.y, pos.z, entityWorld.x, entityWorld.y, entityWorld.z, 10, pP, 0)
-		local _, _, _, _, vehicleHandle = GetRaycastResult(rayHandle)
-		local vehicle = GetVehiclePedIsIn(pP, false)
-		
-		DetachEntity(pP, true, false)
-		Citizen.Wait(100)
-		if vehicleHandle ~= nil then
-			SetPedIntoVehicle(pP, vehicleHandle, 1)
-		end
-		SetVehicleDoorsLocked(vehicle, 4)
-	end
-end)
-
-RegisterNetEvent('unSeatClient')
-AddEventHandler('unSeatClient', function(closestID)
-	if handcuffed then
-		local pP = GetPlayerPed(-1)
-		local pos = GetEntityCoords(pP)
-		ClearPedTasksImmediately(pP)
-		local xnew = pos.x + 2
-		local ynew = pos.y + 2
-		
-		SetEntityCoords(pP, xnew, ynew, pos.z)
-		SetEnableHandcuffs(pP, true)
-		SetCurrentPedWeapon(pP, GetHashKey('WEAPON_UNARMED'), true)
-		DisablePlayerFiring(pP, true)
-		FreezeEntityPosition(pP, true)
-		handcuffed = true
-	end
-end)
-
-function GetPlayers()
-    local players = {}
-
-    for i = 0, 31 do
-        if NetworkIsPlayerActive(i) then
-            table.insert(players, i)
-        end
-    end
-
-    return players
-end
-
-function GetClosestPlayer()
-    local players = GetPlayers()
-    local closestDistance = -1
-    local closestPlayer = -1
-    local ply = GetPlayerPed(-1)
-    local plyCoords = GetEntityCoords(ply, 0)
-
-    for index,value in ipairs(players) do
-        local target = GetPlayerPed(value)
-        if(target ~= ply) then
-            local targetCoords = GetEntityCoords(GetPlayerPed(value), 0)
-            local distance = GetDistanceBetweenCoords(targetCoords['x'], targetCoords['y'], targetCoords['z'], plyCoords['x'], plyCoords['y'], plyCoords['z'], true)
-            if(closestDistance == -1 or closestDistance > distance) then
-                closestPlayer = value
-                closestDistance = distance
+local isCuffed = false
+RegisterNetEvent('Cuff')
+AddEventHandler('Cuff', function()
+	local Ped = PlayerPedId()
+	if (DoesEntityExist(Ped)) then
+		Citizen.CreateThread(function()
+            RequestAnimDict('mp_arresting')
+            while not HasAnimDictLoaded('mp_arresting') do
+                Citizen.Wait(0)
             end
+
+            if isCuffed then
+                isCuffed = false
+                Citizen.Wait(500)
+                SetEnableHandcuffs(Ped, false)
+                ClearPedTasksImmediately(Ped)
+            else
+                isCuffed = true
+				SetEnableHandcuffs(Ped, true)
+				TaskPlayAnim(Ped, 'mp_arresting', 'idle', 8.0, -8, -1, 49, 0, 0, 0, 0)
+            end
+		end)
+	end
+end)
+
+Citizen.CreateThread(function()
+	while true do
+		Citizen.Wait(1)
+
+        if isCuffed then
+            if not IsEntityPlayingAnim(GetPlayerPed(PlayerId()), 'mp_arresting', 'idle', 3) then
+                TaskPlayAnim(GetPlayerPed(PlayerId()), 'mp_arresting', 'idle', 8.0, -8, -1, 49, 0, 0, 0, 0)
+            end
+
+            SetCurrentPedWeapon(PlayerPedId(), 'weapon_unarmed', true)
+            
+            if not Config.VehEnterCuffed then
+                DisableControlAction(1, 23, true) --F | Enter Vehicle
+                DisableControlAction(1, 75, true) --F | Exit Vehicle
+            end
+			DisableControlAction(1, 140, true) --R
+			DisableControlAction(1, 141, true) --Q
+			DisableControlAction(1, 142, true) --LMB
+			SetPedPathCanUseLadders(GetPlayerPed(PlayerId()), false)
+			if IsPedInAnyVehicle(GetPlayerPed(PlayerId()), false) then
+				DisableControlAction(0, 59, true) --Vehicle Driving
+			end
+		end
+	end
+end)
+
+local Drag = false
+local OfficerDrag = -1
+RegisterNetEvent('Drag')
+AddEventHandler('Drag', function(ID)
+	Drag = not Drag
+	OfficerDrag = ID
+	
+	if not Drag then
+        DetachEntity(PlayerPedId(), true, false)
+	end
+end)
+
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(1)
+
+        if Drag then
+            local Ped = GetPlayerPed(GetPlayerFromServerId(OfficerDrag))
+            local Ped2 = PlayerPedId()
+            AttachEntityToEntity(Ped2, Ped, 4103, 0.35, 0.38, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 2, true)
+            DisableControlAction(1, 140, true) --R
+			DisableControlAction(1, 141, true) --Q
+			DisableControlAction(1, 142, true) --LMB
         end
     end
+end)
 
-    return closestPlayer, closestDistance
-end
+RegisterNetEvent('Seat')
+AddEventHandler('Seat', function(Veh)
+	local Pos = GetEntityCoords(PlayerPedId())
+	local EntityWorld = GetOffsetFromEntityInWorldCoords(PlayerPedId(), 0.0, 20.0, 0.0)
+    local RayHandle = CastRayPointToPoint(Pos.x, Pos.y, Pos.z, EntityWorld.x, EntityWorld.y, EntityWorld.z, 10, PlayerPedId(), 0)
+    local _, _, _, _, VehicleHandle = GetRaycastResult(RayHandle)
+    if VehicleHandle ~= nil then
+		SetPedIntoVehicle(PlayerPedId(), VehicleHandle, 1)
+	end
+end)
 
-function KeyboardInput(TextEntry, ExampleText, MaxStringLenght)
-    AddTextEntry('FMMC_KEY_TIP1', TextEntry .. ':')
-    DisplayOnscreenKeyboard(1, 'FMMC_KEY_TIP1', '', ExampleText, '', '', '', MaxStringLenght)
-    blockinput = true
+RegisterNetEvent('Unseat')
+AddEventHandler('Unseat', function(ID)
+	local Ped = GetPlayerPed(ID)
+	ClearPedTasksImmediately(Ped)
+	PlayerPos = GetEntityCoords(PlayerPedId(),  true)
+	local X = PlayerPos.x - 0
+	local Y = PlayerPos.y - 0
 
-    while UpdateOnscreenKeyboard() ~= 1 and UpdateOnscreenKeyboard() ~= 2 do
-        Citizen.Wait(0)
-    end
-        
-    if UpdateOnscreenKeyboard() ~= 2 then
-        local result = GetOnscreenKeyboardResult()
-        Citizen.Wait(500)
-        blockinput = false
-        return result
-    else
-        Citizen.Wait(500)
-        blockinput = false
-        return nil
-    end
-end
-
-function getEntityPlayerAimingAt(player)
-	local result, target = GetEntityPlayerIsFreeAimingAt(player)
-	return target
-end
-
-
+    SetEntityCoords(PlayerPedId(), X, Y, PlayerPos.z)
+end)

@@ -1,15 +1,21 @@
-fx_version 'adamant'
-games { 'gta5' }
+fx_version 'cerulean'
+games {'gta5'}
 
-files {
-	'version.json',
+title 'Law Enforcement Tools'
+description 'Law Enforcement Tools'
+author 'Hayley H [Law Enforcement Tools]'
+version 'v1.3.0' 
+
+client_scripts {
+    'client.lua',
+    'config.lua',
+	'NativeUI.lua',
+    'functions.lua',
+    'menu.lua',
 }
 
 server_scripts {
-	'server.lua',
-	'config.lua',
-}
-
-client_scripts {
-	'client.lua',
+    'config.lua',
+    'server.lua',
+    'functions.lua',
 }
